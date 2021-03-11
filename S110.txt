@@ -1,0 +1,1288 @@
+package smf.cics.smf110;
+
+import configuration.smf.SmfConfig;
+import datamodel.data.OneRecord;
+import datamodel.data.RecordDescriptor;
+import org.json.simple.JSONObject;
+import smf.Smf;
+import smf.cics.smf110.subtype1.Smf110_1;
+
+import java.util.Arrays;
+
+public class Smf110 extends Smf {
+    private Smf110_1 smf110_1 = new Smf110_1();
+
+    @Override
+    public void set(byte[] record) {
+        super.set(Arrays.copyOfRange(record, 0, 28));
+        if (this.getSmfStp() == 1) {
+            //smf101_0.setSmf101Subtype0(record);
+            smf110_1.setSmf110Subtype1(record);
+        } else {
+            smf110_1.setInitialized(false);
+        }
+
+    }
+
+    @Override
+    public String getStandardInfoAboutSmf() {
+        return "\"MFID\":\"" + SmfConfig.getInstance().getInput_1_mfid() + "\"" +
+                ",\"LPAR\":\"" + SmfConfig.getInstance().getInput_1_lpar() + "\"" +
+                ",\"SYSTEM\":\"" + SmfConfig.getInstance().getInput_1_sysname() + "\"" +
+                ",\"SYSPLEX\":\"" + SmfConfig.getInstance().getInput_1_sysplex() + "\"" +
+                ",\"SOURCE\":\"smf\"" +
+                ",\"MVS_SYSTEM_ID\":\"" + super.getSmfSid() + "\"" +
+                ",\"dateAndTime\":\"" + super.getSmfDateAndTime() + "\"";
+    }
+
+    @Override
+    public RecordDescriptor getData() {
+        if (smf110_1.isInitialized()) {
+            return smf110_1.getData(getSmfDateAndTime(), this.getStandardInfoAboutSmf());
+        }
+        /*
+        if (smf101_1.isInitialized()) {
+            return smf101_1.getData(getSmfDateAndTime(), this.getStandardInfoAboutSmf());
+        }
+        */
+        return null;
+    }
+
+}
+
+
+
+
+
+
+
+
+
+---------------------
+
+
+
+
+
+
+
+
+
+
+
+package smf.cics.smf110.subtype1;
+
+
+import configuration.smf.SmfConfig;
+import datamodel.data.ManyRecords;
+import datamodel.data.OneRecord;
+import datamodel.data.Record;
+import datamodel.data.RecordDescriptor;
+import org.json.simple.JSONObject;
+import smf.Smf;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import static converters.Converter.*;
+import static converters.Converter.byteArrayToDate;
+
+public class Smf110_1 {
+    private boolean initialized = false;
+    private long smf110Bin;
+    private long smf110Aps;
+    private int smf110Lps;
+    private int smf110Nps;
+    private long smf110Ass;
+    private int smf110Lss;
+    private int smf110Nss;
+    private int smf110FullSize;
+    private Smf110Subtype1ProductSection smf110Subtype1ProductSection = new Smf110Subtype1ProductSection();
+    private Smf110Subtype1PerformanceDataSection smf110Subtype1PerformanceDataSection = new Smf110Subtype1PerformanceDataSection();
+    private List<Smf110Subtype1PerformanceDataSection> smf110Subtype1PerformanceDataSectionList = new ArrayList<>();
+    private byte[] record;
+
+    public void setSmf110Subtype1(byte[] recordLocal) {
+        initialized = true;
+        this.record = recordLocal;
+        smf110Bin = byteArrayToUint32(Arrays.copyOfRange(record, 24, 28));
+        smf110Aps = byteArrayToUint32(Arrays.copyOfRange(record, 28, 32));
+        smf110Lps = byteArrayToUint16(Arrays.copyOfRange(record, 32, 34));
+        smf110Nps = byteArrayToUint16(Arrays.copyOfRange(record, 34, 36));
+        smf110Ass = byteArrayToUint32(Arrays.copyOfRange(record, 36, 40));
+        smf110Lss = byteArrayToUint16(Arrays.copyOfRange(record, 40, 42));
+        smf110Nss = byteArrayToUint16(Arrays.copyOfRange(record, 42, 44));
+        //smf110FullSize = (int)(smf110Len + smfBuf);
+
+        getSmf110Subtype1ProductSection();
+        smf110Subtype1PerformanceDataSectionList = getSmf110Subtype1PerformanceDataSectionList();
+
+    }
+
+    public RecordDescriptor getData(String timestamp, String standardInfo) {
+        String data;
+        List<Record> recordList = new ArrayList<>();
+
+
+        if (smf110Subtype1PerformanceDataSectionList != null) {
+            String elkIndex = Smf.getIndexData("110", timestamp);
+            for (Smf110Subtype1PerformanceDataSection x : smf110Subtype1PerformanceDataSectionList) {
+                data = "{" +
+                        standardInfo +
+                        ",\"SOURCEID\":\"110.1\"";
+                if (smf110Subtype1ProductSection.isInitialized()) {
+                    data += smf110Subtype1ProductSection.getData();
+                }
+                data += x.getData() +
+                        "}";
+                recordList.add(new Record(elkIndex, data));
+            }
+            return new ManyRecords(recordList);
+        } else {
+            return null;
+        }
+
+    }
+
+    private void getSmf110Subtype1ProductSection() {
+
+        if (smf110Nps >= 1) {
+            smf110Subtype1ProductSection.setSmf110ProductSection(Arrays.copyOfRange(
+                    record,
+                    (int) smf110Aps,
+                    (int) smf110Aps + smf110Lps));
+            smf110Subtype1ProductSection.setInitialized(true);
+
+        }else{
+            smf110Subtype1ProductSection.setInitialized(false);
+        }
+
+    }
+
+    private List<Smf110Subtype1PerformanceDataSection> getSmf110Subtype1PerformanceDataSectionList() {
+
+        if (smf110Subtype1ProductSection.getSMF110S1_MNCRL() == 0) {
+            //record uncompressed
+
+            if (smf110Subtype1ProductSection.getSMF110S1_MNCL() == 3 && smf110Subtype1ProductSection.getSMF110S1_MNDRN() >= 1) {
+                int offset = (int) smf110Subtype1ProductSection.getSMF110S1_MNDRA();
+                //int ptrSec = (int) smf110ProductSection.getSMF110S1_MNDRA();
+
+                List<Smf110Subtype1PerformanceDataSection> listOfSmf110PerformanceDataSection = new ArrayList<>();
+
+                for (int i = 0; i < smf110Subtype1ProductSection.getSMF110S1_MNDRN(); i++) {
+                    Smf110Subtype1PerformanceDataSection smf110Subtype1PerformanceDataSectionLocal = new Smf110Subtype1PerformanceDataSection();
+                    //ptrSec += offset;
+                    smf110Subtype1PerformanceDataSectionLocal.setSmf110PerformanceDataSection(Arrays.copyOfRange(
+                            record,
+                            offset,
+                            offset + smf110Subtype1ProductSection.getSMF110S1_MNDRL()));
+                    listOfSmf110PerformanceDataSection.add(smf110Subtype1PerformanceDataSectionLocal);
+                    offset += smf110Subtype1ProductSection.getSMF110S1_MNDRL();
+                    //System.out.println(smf110PerformanceDataSection.toString());
+
+                    /*for(int j=0;j<listOfSmf110PerformanceDataSection.size();j++){
+                        System.out.println(listOfSmf110PerformanceDataSection.get(j).toString());
+                    }*/
+                }
+
+
+                return listOfSmf110PerformanceDataSection;
+
+
+            }
+        }
+        return null;
+    }
+
+
+    @Override
+    public String toString() {
+        return "\"smf110Bin\":" + smf110Bin +
+                ", \"smf110Aps\":" + smf110Aps +
+                ", \"smf110Lps\":" + smf110Lps +
+                ", \"smf110Nps\":" + smf110Nps +
+                ", \"smf110Ass\":" + smf110Ass +
+                ", \"smf110Lss\":" + smf110Lss +
+                ", \"smf110Nss\":" + smf110Nss;
+    }
+
+    public JSONObject getJsonData() {
+        JSONObject data = new JSONObject();
+        data.put("smf110Bin", smf110Bin);
+        data.put("smf110Aps", smf110Aps);
+        data.put("smf110Lps", smf110Lps);
+        data.put("smf110Nps", smf110Nps);
+        data.put("smf110Ass", smf110Ass);
+        data.put("smf110Lss", smf110Lss);
+        data.put("smf110Nss", smf110Nss);
+        return data;
+    }
+
+    public boolean isInitialized() {
+        return initialized;
+    }
+
+    public void setInitialized(boolean initialized) {
+        this.initialized = initialized;
+    }
+
+    public long getSmf110Bin() {
+        return smf110Bin;
+    }
+
+    public void setSmf110Bin(long smf110Bin) {
+        this.smf110Bin = smf110Bin;
+    }
+
+    public long getSmf110Aps() {
+        return smf110Aps;
+    }
+
+    public void setSmf110Aps(long smf110Aps) {
+        this.smf110Aps = smf110Aps;
+    }
+
+    public int getSmf110Lps() {
+        return smf110Lps;
+    }
+
+    public void setSmf110Lps(int smf110Lps) {
+        this.smf110Lps = smf110Lps;
+    }
+
+    public int getSmf110Nps() {
+        return smf110Nps;
+    }
+
+    public void setSmf110Nps(int smf110Nps) {
+        this.smf110Nps = smf110Nps;
+    }
+
+    public long getSmf110Ass() {
+        return smf110Ass;
+    }
+
+    public void setSmf110Ass(long smf110Ass) {
+        this.smf110Ass = smf110Ass;
+    }
+
+    public int getSmf110Lss() {
+        return smf110Lss;
+    }
+
+    public void setSmf110Lss(int smf110Lss) {
+        this.smf110Lss = smf110Lss;
+    }
+
+    public int getSmf110Nss() {
+        return smf110Nss;
+    }
+
+    public void setSmf110Nss(int smf110Nss) {
+        this.smf110Nss = smf110Nss;
+    }
+
+    public int getSmf110FullSize() {
+        return smf110FullSize;
+    }
+
+    public void setSmf110FullSize(int smf110FullSize) {
+        this.smf110FullSize = smf110FullSize;
+    }
+
+
+}
+
+
+
+
+
+
+
+
+
+
+--------------------
+
+
+
+
+
+
+
+package smf.cics.smf110.subtype1;
+
+import org.json.simple.JSONObject;
+
+import java.math.BigInteger;
+import java.util.Arrays;
+
+import static constant.SmfConstant.TO_SECONDS_MULT;
+import static converters.Converter.*;
+
+public class Smf110Subtype1PerformanceDataSection {
+    private boolean initialized = false;
+    private String SMF110S1_TRAN;
+    private String SMF110S1_TERM;
+    private String SMF110S1_USERID;
+    private String SMF110S1_TTYPE;
+    private BigInteger SMF110S1_START;
+    private BigInteger SMF110S1_STOP;
+    private long SMF110S1_TRANNUM;
+    private long SMF110S1_TRANPRI;
+    private String SMF110S1_TCLSNAME;
+    private String SMF110S1_LUNAME;
+    private String SMF110S1_PGMNAME;
+    //private String bin01;
+    private String SMF110S1_ABCODEO;
+    private String SMF110S1_ABCODEC;
+    //private String bin02;
+    private long SMF110S1_SPSYNCCT;
+    //private String bin03;
+    private BigInteger SMF110S1_USRDISPT;
+    //private String bin04;
+    private BigInteger SMF110S1_USRCPUT;
+    //private String bin05;
+    //private String bin06;
+    private BigInteger SMF110S1_SUSPTIME;
+    //private String bin07;
+    //private String bin08;
+    private BigInteger SMF110S1_KY8DISPT;
+    //private String bin09;
+    //private String bin10;
+    private BigInteger SMF110S1_L8CPUT;
+    //private String bin11;
+    private BigInteger SMF110S1_J8CPUT;
+    //private String bin12;
+    private BigInteger SMF110S1_S8CPUT;
+    //private String bin13;
+    //private String bin14;
+    private BigInteger SMF110S1_TCIOWTT;
+    //private String bin15;
+    //private String bin16;
+    private BigInteger SMF110S1_RMITIME;
+    //private String bin17;
+    private BigInteger SMF110S1_RMISUSP;
+    //private String bin18;
+    private BigInteger SMF110S1_SYNCTIME;
+    //private String bin19;
+    //private String bin20;
+    private BigInteger SMF110S1_RLSCPUT;
+    //private String bin21;
+    private BigInteger SMF110S1_RMITOTAL;
+    //private String bin22;
+    private BigInteger SMF110S1_RMIOTHER;
+    //private String bin23;
+    private BigInteger SMF110S1_RMIDB2;
+    //private String bin24;
+    private BigInteger SMF110S1_RMIDBCTL;
+    //private String bin25;
+    private BigInteger SMF110S1_RMIEXDLI;
+    //private String bin26;
+    private BigInteger SMF110S1_RMIMQM;
+    //private String bin27;
+    private BigInteger SMF110S1_RMICPSM;
+    //private String bin28;
+    private BigInteger SMF110S1_RMITCPIP;
+    //private String bin29;
+    private String SMF110S1_TRANNUM_PACKED_DEC;
+    private String SMF110S1_TRANNUM_PACKED_DEC_CUT;
+    private double RT;
+
+    private String SMF110S1_RMUOWID;
+    private String SMF110S1_SRVCLSNM;
+    private String SMF110S1_RPTCLSNM;
+
+    private BigInteger SMF110S1_DISPWTT;
+    private BigInteger SMF110S1_QRDISPT;
+    private BigInteger SMF110S1_QRCPUT;
+    private BigInteger SMF110S1_RODISPT;
+    private BigInteger SMF110S1_ROCPUT;
+    private BigInteger SMF110S1_KY8CPUT;
+    private BigInteger SMF110S1_KY9DISPT;
+    private BigInteger SMF110S1_KY9CPUT;
+    private BigInteger SMF110S1_L9CPUT;
+    private BigInteger SMF110S1_X8CPUT;
+    private BigInteger SMF110S1_X9CPUT;
+    private BigInteger SMF110S1_ENQDELAY;
+    private BigInteger SMF110S1_GNQDELAY;
+    private BigInteger SMF110S1_JVMTIME;
+    private BigInteger SMF110S1_JVMSUSP;
+
+
+    public void setSmf110PerformanceDataSection(byte[] record) {
+        SMF110S1_TRAN = byteArrayToString(Arrays.copyOfRange(record, 0, 4));
+        SMF110S1_TERM = byteArrayToString(Arrays.copyOfRange(record, 4, 8));
+        SMF110S1_USERID = byteArrayToString(Arrays.copyOfRange(record, 8, 16));
+        SMF110S1_TTYPE = byteArrayToString(Arrays.copyOfRange(record, 16, 20));
+        SMF110S1_START = byteArrayToUint64(Arrays.copyOfRange(record, 20, 28));
+        SMF110S1_STOP = byteArrayToUint64(Arrays.copyOfRange(record, 28, 36));
+        SMF110S1_TRANNUM = byteArrayToUint32(Arrays.copyOfRange(record, 36, 40));
+        SMF110S1_TRANPRI = byteArrayToUint32(Arrays.copyOfRange(record, 40, 44));
+        SMF110S1_TCLSNAME = byteArrayToString(Arrays.copyOfRange(record, 44, 52));
+        SMF110S1_LUNAME = byteArrayToString(Arrays.copyOfRange(record, 52, 60));
+        SMF110S1_PGMNAME = byteArrayToString(Arrays.copyOfRange(record, 60, 68));
+
+
+        SMF110S1_RMUOWID = byteArrayToString(Arrays.copyOfRange(record, 104, 112));
+        SMF110S1_RMUOWID = SMF110S1_RMUOWID.replace("\\","");
+
+
+        SMF110S1_SRVCLSNM = byteArrayToString(Arrays.copyOfRange(record, 112, 120));
+        SMF110S1_RPTCLSNM = byteArrayToString(Arrays.copyOfRange(record, 120, 128));
+        //bin01 = byteArrayToString(Arrays.copyOfRange(record,68,1404));
+//        SMF110S1_ABCODEO = byteArrayToString(Arrays.copyOfRange(record, 1404, 1408));
+//        SMF110S1_ABCODEC = byteArrayToString(Arrays.copyOfRange(record, 1408, 1412));
+        //bin02 = byteArrayToString(Arrays.copyOfRange(record,1412,1784));
+        SMF110S1_SPSYNCCT = byteArrayToUint32(Arrays.copyOfRange(record, 1784, 1788));
+        //bin03 = byteArrayToString(Arrays.copyOfRange(record,1788,2236));
+
+
+        //CLOCK VALUES
+
+        SMF110S1_DISPWTT = byteArrayToUint64(Arrays.copyOfRange(record, 1272, 1280));
+        SMF110S1_QRDISPT = byteArrayToUint64(Arrays.copyOfRange(record, 1280, 1288));
+        SMF110S1_QRCPUT = byteArrayToUint64(Arrays.copyOfRange(record, 1288, 1296));
+        SMF110S1_RODISPT = byteArrayToUint64(Arrays.copyOfRange(record, 1312, 1320));
+        SMF110S1_ROCPUT = byteArrayToUint64(Arrays.copyOfRange(record, 1320, 1328));
+        SMF110S1_KY8CPUT = byteArrayToUint64(Arrays.copyOfRange(record, 1336, 1344));
+        SMF110S1_KY9DISPT = byteArrayToUint64(Arrays.copyOfRange(record, 1344, 1352));
+        SMF110S1_KY9CPUT = byteArrayToUint64(Arrays.copyOfRange(record, 1352, 1360));
+        SMF110S1_L9CPUT = byteArrayToUint64(Arrays.copyOfRange(record, 1368, 1376));
+        SMF110S1_X8CPUT = byteArrayToUint64(Arrays.copyOfRange(record, 1400, 1408));
+        SMF110S1_X9CPUT = byteArrayToUint64(Arrays.copyOfRange(record, 1408, 1416));
+        SMF110S1_ENQDELAY = byteArrayToUint64(Arrays.copyOfRange(record, 1560, 1568));
+        SMF110S1_GNQDELAY = byteArrayToUint64(Arrays.copyOfRange(record, 1568, 1576));
+        SMF110S1_JVMTIME = byteArrayToUint64(Arrays.copyOfRange(record, 1768, 1776));
+        SMF110S1_JVMSUSP = byteArrayToUint64(Arrays.copyOfRange(record, 1776, 1784));
+
+        SMF110S1_USRDISPT = byteArrayToUint64(Arrays.copyOfRange(record, 2236, 2244));
+        //bin04 = byteArrayToString(Arrays.copyOfRange(record,2244,2248));
+        SMF110S1_USRCPUT = byteArrayToUint64(Arrays.copyOfRange(record, 2248, 2256));
+        //bin05 = byteArrayToString(Arrays.copyOfRange(record,2256,2260));
+        //bin06 = byteArrayToString(Arrays.copyOfRange(record,2260,2284));
+        SMF110S1_SUSPTIME = byteArrayToUint64(Arrays.copyOfRange(record, 2284, 2292));
+        //bin07 = byteArrayToString(Arrays.copyOfRange(record,2292,2296));
+        //bin08 = byteArrayToString(Arrays.copyOfRange(record,2296,2380));
+        SMF110S1_KY8DISPT = byteArrayToUint64(Arrays.copyOfRange(record, 2380, 2388));
+        //bin09 = byteArrayToString(Arrays.copyOfRange(record,2388,2392));
+        //bin10 = byteArrayToString(Arrays.copyOfRange(record,2392,2428));
+        SMF110S1_L8CPUT = byteArrayToUint64(Arrays.copyOfRange(record, 2428, 2436));
+        //bin11 = byteArrayToString(Arrays.copyOfRange(record,2436,2440));
+        SMF110S1_J8CPUT = byteArrayToUint64(Arrays.copyOfRange(record, 2440, 2448));
+        //bin12 = byteArrayToString(Arrays.copyOfRange(record,2448,2452));
+        SMF110S1_S8CPUT = byteArrayToUint64(Arrays.copyOfRange(record, 2452, 2460));
+        //bin13 = byteArrayToString(Arrays.copyOfRange(record,2460,2464));
+        //bin14 = byteArrayToString(Arrays.copyOfRange(record,2464,2596));
+        SMF110S1_TCIOWTT = byteArrayToUint64(Arrays.copyOfRange(record, 2596, 2604));
+        //bin15 = byteArrayToString(Arrays.copyOfRange(record,2604,2608));
+        //bin16 = byteArrayToString(Arrays.copyOfRange(record,2608,2800));
+        SMF110S1_RMITIME = byteArrayToUint64(Arrays.copyOfRange(record, 2800, 2808));
+        //bin17 = byteArrayToString(Arrays.copyOfRange(record,2808,2812));
+        SMF110S1_RMISUSP = byteArrayToUint64(Arrays.copyOfRange(record, 2812, 2820));
+        //bin18 = byteArrayToString(Arrays.copyOfRange(record,2820,2824));
+        SMF110S1_SYNCTIME = byteArrayToUint64(Arrays.copyOfRange(record, 2824, 2832));
+        //bin19 = byteArrayToString(Arrays.copyOfRange(record,2832,2836));
+        //bin20 = byteArrayToString(Arrays.copyOfRange(record,2836,2848));
+        SMF110S1_RLSCPUT = byteArrayToUint64(Arrays.copyOfRange(record, 2848, 2856));
+        //bin21 = byteArrayToString(Arrays.copyOfRange(record,2856,3292));
+        SMF110S1_RMITOTAL = byteArrayToUint64(Arrays.copyOfRange(record, 3292, 3300));
+        //bin22 = byteArrayToString(Arrays.copyOfRange(record,3300,3304));
+        SMF110S1_RMIOTHER = byteArrayToUint64(Arrays.copyOfRange(record, 3304, 3312));
+        //bin23 = byteArrayToString(Arrays.copyOfRange(record,3312,3316));
+        SMF110S1_RMIDB2 = byteArrayToUint64(Arrays.copyOfRange(record, 3316, 3324));
+        //bin24 = byteArrayToString(Arrays.copyOfRange(record,3324,3328));
+        SMF110S1_RMIDBCTL = byteArrayToUint64(Arrays.copyOfRange(record, 3328, 3336));
+        //bin25 = byteArrayToString(Arrays.copyOfRange(record,3336,3340));
+        SMF110S1_RMIEXDLI = byteArrayToUint64(Arrays.copyOfRange(record, 3340, 3348));
+        //bin26 = byteArrayToString(Arrays.copyOfRange(record,3348,3352));
+        SMF110S1_RMIMQM = byteArrayToUint64(Arrays.copyOfRange(record, 3352, 3360));
+        //bin27 = byteArrayToString(Arrays.copyOfRange(record,3360,3364));
+        SMF110S1_RMICPSM = byteArrayToUint64(Arrays.copyOfRange(record, 3364, 3372));
+        //bin28 = byteArrayToString(Arrays.copyOfRange(record,3372,3376));
+        SMF110S1_RMITCPIP = byteArrayToUint64(Arrays.copyOfRange(record, 3376, 3384));
+        //bin29 = byteArrayToString(Arrays.copyOfRange(record,3384,3388));
+
+        RT = (SMF110S1_STOP.doubleValue() - SMF110S1_START.doubleValue()) * TO_SECONDS_MULT.getValue();
+
+//        SMF110S1_TRANNUM_PACKED_DEC = Integer.toHexString((int) getSMF110S1_TRANNUM());
+        SMF110S1_TRANNUM_PACKED_DEC = Long.toHexString(this.SMF110S1_TRANNUM);
+        SMF110S1_TRANNUM_PACKED_DEC_CUT = SMF110S1_TRANNUM_PACKED_DEC.substring(0, SMF110S1_TRANNUM_PACKED_DEC.length() - 1);
+
+    }
+
+
+    @Override
+    public String toString() {
+        return "\"TRAN\":\"" + SMF110S1_TRAN + '\"' +
+                ", \"TERM\":\"" + SMF110S1_TERM + '\"' +
+                ", \"USERID\":\"" + SMF110S1_USERID + '\"' +
+                ", \"TTYPE\":\"" + SMF110S1_TTYPE + '\"' +
+                ", \"RT\":" + RT +
+                ", \"TRANNUM\":" + SMF110S1_TRANNUM_PACKED_DEC_CUT +
+                ", \"TRANPRI\":" + SMF110S1_TRANPRI +
+                ", \"TCLSNAME\":\"" + SMF110S1_TCLSNAME + '\"' +
+                ", \"LUNAME\":\"" + SMF110S1_LUNAME + '\"' +
+                ", \"PGMNAME\":\"" + SMF110S1_PGMNAME + '\"' +
+                ", \"ABCODEO\":\"" + SMF110S1_ABCODEO + '\"' +
+                ", \"ABCODEC\":\"" + SMF110S1_ABCODEC + '\"' +
+                ", \"SMF110S1_RMUOWID\":\"" + SMF110S1_RMUOWID + '\"' +
+                ", \"SMF110S1_SRVCLSNM\":\"" + SMF110S1_SRVCLSNM + '\"' +
+                ", \"SMF110S1_RPTCLSNM\":\"" + SMF110S1_RPTCLSNM + '\"' +
+                ", \"SPSYNCCT\":" + SMF110S1_SPSYNCCT +
+
+                //CLOCK VALUES
+
+                ", \"USRDISPT\":" + SMF110S1_USRDISPT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"USRCPUT\":" + SMF110S1_USRCPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SUSPTIME\":" + SMF110S1_SUSPTIME.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"KY8DISPT\":" + SMF110S1_KY8DISPT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"L8CPUT\":" + SMF110S1_L8CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"J8CPUT\":" + SMF110S1_J8CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"S8CPUT\":" + SMF110S1_S8CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"TCIOWTT\":" + SMF110S1_TCIOWTT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RMITIME\":" + SMF110S1_RMITIME.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RMISUSP\":" + SMF110S1_RMISUSP.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SYNCTIME\":" + SMF110S1_SYNCTIME.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RLSCPUT\":" + SMF110S1_RLSCPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RMITOTAL\":" + SMF110S1_RMITOTAL.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RMIOTHER\":" + SMF110S1_RMIOTHER.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RMIDB2\":" + SMF110S1_RMIDB2.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RMIDBCTL\":" + SMF110S1_RMIDBCTL.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RMIEXDLI\":" + SMF110S1_RMIEXDLI.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RMIMQM\":" + SMF110S1_RMIMQM.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RMICPSM\":" + SMF110S1_RMICPSM.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"RMITCPIP\":" + SMF110S1_RMITCPIP.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_DISPWTT\":" + SMF110S1_DISPWTT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_QRDISPT\":" + SMF110S1_QRDISPT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_QRCPUT\":" + SMF110S1_QRCPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_RODISPT\":" + SMF110S1_RODISPT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_ROCPUT\":" + SMF110S1_ROCPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_KY8CPUT\":" + SMF110S1_KY8CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_KY9DISPT\":" + SMF110S1_KY9DISPT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_KY9CPUT\":" + SMF110S1_KY9CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_L9CPUT\":" + SMF110S1_L9CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_X8CPUT\":" + SMF110S1_X8CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_X9CPUT\":" + SMF110S1_X9CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_ENQDELAY\":" + SMF110S1_ENQDELAY.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_GNQDELAY\":" + SMF110S1_GNQDELAY.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_JVMTIME\":" + SMF110S1_JVMTIME.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"SMF110S1_JVMSUSP\":" + SMF110S1_JVMSUSP.doubleValue() * TO_SECONDS_MULT.getValue();
+    }
+
+    public String getOldData() {
+        return ",\"TRAN\":\"" + SMF110S1_TRAN + "\"" +
+                ",\"TERM\":\"" + SMF110S1_TERM + "\"" +
+                ",\"USERID\":\"" + SMF110S1_USERID + "\"" +
+                ",\"TTYPE\":\"" + SMF110S1_TTYPE + "\"" +
+                ",\"RT\":" + RT +
+                ",\"TRANNUM\":\"" + SMF110S1_TRANNUM_PACKED_DEC_CUT + "\"" +
+                ",\"TRANPRI\":" + SMF110S1_TRANPRI +
+                ",\"TCLSNAME\":\"" + SMF110S1_TCLSNAME + "\"" +
+                ",\"LUNAME\":\"" + SMF110S1_LUNAME + "\"" +
+                ",\"PGMNAME\":\"" + SMF110S1_PGMNAME + "\"" +
+                ",\"ABCODEO\":\"" + SMF110S1_ABCODEO + "\"" +
+                ",\"ABCODEC\":\"" + SMF110S1_ABCODEC + "\"" +
+                ",\"SPSYNCCT\":" + SMF110S1_SPSYNCCT +
+                ",\"USRDISPT\":" + SMF110S1_USRDISPT +
+                ",\"USRCPUT\":" + SMF110S1_USRCPUT +
+                ",\"SUSPTIME\":" + SMF110S1_SUSPTIME +
+                ",\"KY8DISPT\":" + SMF110S1_KY8DISPT +
+                ",\"L8CPUT\":" + SMF110S1_L8CPUT +
+                ",\"J8CPUT\":" + SMF110S1_J8CPUT +
+                ",\"S8CPUT\":" + SMF110S1_S8CPUT +
+                ",\"TCIOWTT\":" + SMF110S1_TCIOWTT +
+                ",\"RMITIME\":" + SMF110S1_RMITIME +
+                ",\"RMISUSP\":" + SMF110S1_RMISUSP +
+                ",\"SYNCTIME\":" + SMF110S1_SYNCTIME +
+                ",\"RLSCPUT\":" + SMF110S1_RLSCPUT +
+                ",\"RMITOTAL\":" + SMF110S1_RMITOTAL +
+                ",\"RMIOTHER\":" + SMF110S1_RMIOTHER +
+                ",\"RMIDB2\":" + SMF110S1_RMIDB2 +
+                ",\"RMIDBCTL\":" + SMF110S1_RMIDBCTL +
+                ",\"RMIEXDLI\":" + SMF110S1_RMIEXDLI +
+                ",\"RMIMQM\":" + SMF110S1_RMIMQM +
+                ",\"RMICPSM\":" + SMF110S1_RMICPSM +
+                ",\"RMITCPIP\":" + SMF110S1_RMITCPIP;
+    }
+
+    public String getData() {
+        return ", \"tran_name\":\"" + SMF110S1_TRAN + '\"' +
+                ", \"tran_userid\":\"" + SMF110S1_USERID + '\"' +
+                ", \"tran_type\":\"" + SMF110S1_TTYPE + '\"' +
+                ", \"tran_response_time\":" + RT +
+                ", \"tran_number\":" + SMF110S1_TRANNUM_PACKED_DEC_CUT +
+                ", \"tran_priority\":" + SMF110S1_TRANPRI +
+                ", \"tran_clsname\":\"" + SMF110S1_TCLSNAME + '\"' +
+                ", \"tran_luname\":\"" + SMF110S1_LUNAME + '\"' +
+                ", \"tran_pgmname\":\"" + SMF110S1_PGMNAME + '\"' +
+//                ", \"tran_unit_of_recovery_task\":\"" + SMF110S1_RMUOWID + '\"' +
+                ", \"serviceclass_name\":\"" + SMF110S1_SRVCLSNM + '\"' +
+                ", \"tran_reportclass_name\":\"" + SMF110S1_RPTCLSNM + '\"' +
+                ", \"tran_usr_dispt\":" + SMF110S1_USRDISPT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_cpu_time\":" + SMF110S1_USRCPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_susp_time\":" + SMF110S1_SUSPTIME.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_ky8dispt\":" + SMF110S1_KY8DISPT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_l8cput\":" + SMF110S1_L8CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_s8cput\":" + SMF110S1_S8CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rmitime\":" + SMF110S1_RMITIME.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rmisusp\":" + SMF110S1_RMISUSP.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_synctime\":" + SMF110S1_SYNCTIME.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rmitotal\":" + SMF110S1_RMITOTAL.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rmiother\":" + SMF110S1_RMIOTHER.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rmidb2\":" + SMF110S1_RMIDB2.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rmidbctl\":" + SMF110S1_RMIDBCTL.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rmiexdli\":" + SMF110S1_RMIEXDLI.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rmimqm\":" + SMF110S1_RMIMQM.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rmicpsm\":" + SMF110S1_RMICPSM.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rmitcpip\":" + SMF110S1_RMITCPIP.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_redispatch_time\":" + SMF110S1_DISPWTT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_qr_dispatch\":" + SMF110S1_QRDISPT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_qr_cpu_dispatch\":" + SMF110S1_QRCPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rodispt\":" + SMF110S1_RODISPT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_rocput\":" + SMF110S1_ROCPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_ky8cput\":" + SMF110S1_KY8CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_ky9disp\":" + SMF110S1_KY9DISPT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_ky9cput\":" + SMF110S1_KY9CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_l9cput\":" + SMF110S1_L9CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_x8cput\":" + SMF110S1_X8CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_x9cput\":" + SMF110S1_X9CPUT.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_local_enqueue_wait\":" + SMF110S1_ENQDELAY.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_global_enqueue_wait\":" + SMF110S1_GNQDELAY.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_jvm_time\":" + SMF110S1_JVMTIME.doubleValue() * TO_SECONDS_MULT.getValue() +
+                ", \"tran_jvm_susp_time\":" + SMF110S1_JVMSUSP.doubleValue() * TO_SECONDS_MULT.getValue();
+    }
+
+
+
+    @Deprecated
+    public JSONObject getJsonData() {
+        JSONObject data = new JSONObject();
+        data.put("TRAN", SMF110S1_TRAN);
+        data.put("TERM", SMF110S1_TERM);
+        data.put("USERID", SMF110S1_USERID);
+        data.put("TTYPE", SMF110S1_TTYPE);
+        data.put("RT", RT);
+        data.put("TRANNUM", SMF110S1_TRANNUM_PACKED_DEC_CUT);
+        data.put("TRANPRI", SMF110S1_TRANPRI);
+        data.put("TCLSNAME", SMF110S1_TCLSNAME);
+        data.put("LUNAME", SMF110S1_LUNAME);
+        data.put("PGMNAME", SMF110S1_PGMNAME);
+        data.put("ABCODEO", SMF110S1_ABCODEO);
+        data.put("ABCODEC", SMF110S1_ABCODEC);
+        data.put("SPSYNCCT", SMF110S1_SPSYNCCT);
+        data.put("USRDISPT", SMF110S1_USRDISPT);
+        data.put("USRCPUT", SMF110S1_USRCPUT);
+        data.put("SUSPTIME", SMF110S1_SUSPTIME);
+        data.put("KY8DISPT", SMF110S1_KY8DISPT);
+        data.put("L8CPUT", SMF110S1_L8CPUT);
+        data.put("J8CPUT", SMF110S1_J8CPUT);
+        data.put("S8CPUT", SMF110S1_S8CPUT);
+        data.put("TCIOWTT", SMF110S1_TCIOWTT);
+        data.put("RMITIME", SMF110S1_RMITIME);
+        data.put("RMISUSP", SMF110S1_RMISUSP);
+        data.put("SYNCTIME", SMF110S1_SYNCTIME);
+        data.put("RLSCPUT", SMF110S1_RLSCPUT);
+        data.put("RMITOTAL", SMF110S1_RMITOTAL);
+        data.put("RMIOTHER", SMF110S1_RMIOTHER);
+        data.put("RMIDB2", SMF110S1_RMIDB2);
+        data.put("RMIDBCTL", SMF110S1_RMIDBCTL);
+        data.put("RMIEXDLI", SMF110S1_RMIEXDLI);
+        data.put("RMIMQM", SMF110S1_RMIMQM);
+        data.put("RMICPSM", SMF110S1_RMICPSM);
+        data.put("RMITCPIP", SMF110S1_RMITCPIP);
+        return data;
+    }
+
+    public boolean isInitialized() {
+        return initialized;
+    }
+
+    public void setInitialized(boolean initialized) {
+        this.initialized = initialized;
+    }
+
+    public String getSMF110S1_TRAN() {
+        return SMF110S1_TRAN;
+    }
+
+    public void setSMF110S1_TRAN(String SMF110S1_TRAN) {
+        this.SMF110S1_TRAN = SMF110S1_TRAN;
+    }
+
+    public String getSMF110S1_TERM() {
+        return SMF110S1_TERM;
+    }
+
+    public void setSMF110S1_TERM(String SMF110S1_TERM) {
+        this.SMF110S1_TERM = SMF110S1_TERM;
+    }
+
+    public String getSMF110S1_USERID() {
+        return SMF110S1_USERID;
+    }
+
+    public void setSMF110S1_USERID(String SMF110S1_USERID) {
+        this.SMF110S1_USERID = SMF110S1_USERID;
+    }
+
+    public String getSMF110S1_TTYPE() {
+        return SMF110S1_TTYPE;
+    }
+
+    public void setSMF110S1_TTYPE(String SMF110S1_TTYPE) {
+        this.SMF110S1_TTYPE = SMF110S1_TTYPE;
+    }
+
+    public BigInteger getSMF110S1_START() {
+        return SMF110S1_START;
+    }
+
+    public void setSMF110S1_START(BigInteger SMF110S1_START) {
+        this.SMF110S1_START = SMF110S1_START;
+    }
+
+    public BigInteger getSMF110S1_STOP() {
+        return SMF110S1_STOP;
+    }
+
+    public void setSMF110S1_STOP(BigInteger SMF110S1_STOP) {
+        this.SMF110S1_STOP = SMF110S1_STOP;
+    }
+
+    public long getSMF110S1_TRANNUM() {
+        return SMF110S1_TRANNUM;
+    }
+
+    public void setSMF110S1_TRANNUM(long SMF110S1_TRANNUM) {
+        this.SMF110S1_TRANNUM = SMF110S1_TRANNUM;
+    }
+
+    public long getSMF110S1_TRANPRI() {
+        return SMF110S1_TRANPRI;
+    }
+
+    public void setSMF110S1_TRANPRI(long SMF110S1_TRANPRI) {
+        this.SMF110S1_TRANPRI = SMF110S1_TRANPRI;
+    }
+
+    public String getSMF110S1_TCLSNAME() {
+        return SMF110S1_TCLSNAME;
+    }
+
+    public void setSMF110S1_TCLSNAME(String SMF110S1_TCLSNAME) {
+        this.SMF110S1_TCLSNAME = SMF110S1_TCLSNAME;
+    }
+
+    public String getSMF110S1_LUNAME() {
+        return SMF110S1_LUNAME;
+    }
+
+    public void setSMF110S1_LUNAME(String SMF110S1_LUNAME) {
+        this.SMF110S1_LUNAME = SMF110S1_LUNAME;
+    }
+
+    public String getSMF110S1_PGMNAME() {
+        return SMF110S1_PGMNAME;
+    }
+
+    public void setSMF110S1_PGMNAME(String SMF110S1_PGMNAME) {
+        this.SMF110S1_PGMNAME = SMF110S1_PGMNAME;
+    }
+
+    public String getSMF110S1_ABCODEO() {
+        return SMF110S1_ABCODEO;
+    }
+
+    public void setSMF110S1_ABCODEO(String SMF110S1_ABCODEO) {
+        this.SMF110S1_ABCODEO = SMF110S1_ABCODEO;
+    }
+
+    public String getSMF110S1_ABCODEC() {
+        return SMF110S1_ABCODEC;
+    }
+
+    public void setSMF110S1_ABCODEC(String SMF110S1_ABCODEC) {
+        this.SMF110S1_ABCODEC = SMF110S1_ABCODEC;
+    }
+
+    public long getSMF110S1_SPSYNCCT() {
+        return SMF110S1_SPSYNCCT;
+    }
+
+    public void setSMF110S1_SPSYNCCT(long SMF110S1_SPSYNCCT) {
+        this.SMF110S1_SPSYNCCT = SMF110S1_SPSYNCCT;
+    }
+
+    public BigInteger getSMF110S1_USRDISPT() {
+        return SMF110S1_USRDISPT;
+    }
+
+    public void setSMF110S1_USRDISPT(BigInteger SMF110S1_USRDISPT) {
+        this.SMF110S1_USRDISPT = SMF110S1_USRDISPT;
+    }
+
+    public BigInteger getSMF110S1_USRCPUT() {
+        return SMF110S1_USRCPUT;
+    }
+
+    public void setSMF110S1_USRCPUT(BigInteger SMF110S1_USRCPUT) {
+        this.SMF110S1_USRCPUT = SMF110S1_USRCPUT;
+    }
+
+    public BigInteger getSMF110S1_SUSPTIME() {
+        return SMF110S1_SUSPTIME;
+    }
+
+    public void setSMF110S1_SUSPTIME(BigInteger SMF110S1_SUSPTIME) {
+        this.SMF110S1_SUSPTIME = SMF110S1_SUSPTIME;
+    }
+
+    public BigInteger getSMF110S1_KY8DISPT() {
+        return SMF110S1_KY8DISPT;
+    }
+
+    public void setSMF110S1_KY8DISPT(BigInteger SMF110S1_KY8DISPT) {
+        this.SMF110S1_KY8DISPT = SMF110S1_KY8DISPT;
+    }
+
+    public BigInteger getSMF110S1_L8CPUT() {
+        return SMF110S1_L8CPUT;
+    }
+
+    public void setSMF110S1_L8CPUT(BigInteger SMF110S1_L8CPUT) {
+        this.SMF110S1_L8CPUT = SMF110S1_L8CPUT;
+    }
+
+    public BigInteger getSMF110S1_J8CPUT() {
+        return SMF110S1_J8CPUT;
+    }
+
+    public void setSMF110S1_J8CPUT(BigInteger SMF110S1_J8CPUT) {
+        this.SMF110S1_J8CPUT = SMF110S1_J8CPUT;
+    }
+
+    public BigInteger getSMF110S1_S8CPUT() {
+        return SMF110S1_S8CPUT;
+    }
+
+    public void setSMF110S1_S8CPUT(BigInteger SMF110S1_S8CPUT) {
+        this.SMF110S1_S8CPUT = SMF110S1_S8CPUT;
+    }
+
+    public BigInteger getSMF110S1_TCIOWTT() {
+        return SMF110S1_TCIOWTT;
+    }
+
+    public void setSMF110S1_TCIOWTT(BigInteger SMF110S1_TCIOWTT) {
+        this.SMF110S1_TCIOWTT = SMF110S1_TCIOWTT;
+    }
+
+    public BigInteger getSMF110S1_RMITIME() {
+        return SMF110S1_RMITIME;
+    }
+
+    public void setSMF110S1_RMITIME(BigInteger SMF110S1_RMITIME) {
+        this.SMF110S1_RMITIME = SMF110S1_RMITIME;
+    }
+
+    public BigInteger getSMF110S1_RMISUSP() {
+        return SMF110S1_RMISUSP;
+    }
+
+    public void setSMF110S1_RMISUSP(BigInteger SMF110S1_RMISUSP) {
+        this.SMF110S1_RMISUSP = SMF110S1_RMISUSP;
+    }
+
+    public BigInteger getSMF110S1_SYNCTIME() {
+        return SMF110S1_SYNCTIME;
+    }
+
+    public void setSMF110S1_SYNCTIME(BigInteger SMF110S1_SYNCTIME) {
+        this.SMF110S1_SYNCTIME = SMF110S1_SYNCTIME;
+    }
+
+    public BigInteger getSMF110S1_RLSCPUT() {
+        return SMF110S1_RLSCPUT;
+    }
+
+    public void setSMF110S1_RLSCPUT(BigInteger SMF110S1_RLSCPUT) {
+        this.SMF110S1_RLSCPUT = SMF110S1_RLSCPUT;
+    }
+
+    public BigInteger getSMF110S1_RMITOTAL() {
+        return SMF110S1_RMITOTAL;
+    }
+
+    public void setSMF110S1_RMITOTAL(BigInteger SMF110S1_RMITOTAL) {
+        this.SMF110S1_RMITOTAL = SMF110S1_RMITOTAL;
+    }
+
+    public BigInteger getSMF110S1_RMIOTHER() {
+        return SMF110S1_RMIOTHER;
+    }
+
+    public void setSMF110S1_RMIOTHER(BigInteger SMF110S1_RMIOTHER) {
+        this.SMF110S1_RMIOTHER = SMF110S1_RMIOTHER;
+    }
+
+    public BigInteger getSMF110S1_RMIDB2() {
+        return SMF110S1_RMIDB2;
+    }
+
+    public void setSMF110S1_RMIDB2(BigInteger SMF110S1_RMIDB2) {
+        this.SMF110S1_RMIDB2 = SMF110S1_RMIDB2;
+    }
+
+    public BigInteger getSMF110S1_RMIDBCTL() {
+        return SMF110S1_RMIDBCTL;
+    }
+
+    public void setSMF110S1_RMIDBCTL(BigInteger SMF110S1_RMIDBCTL) {
+        this.SMF110S1_RMIDBCTL = SMF110S1_RMIDBCTL;
+    }
+
+    public BigInteger getSMF110S1_RMIEXDLI() {
+        return SMF110S1_RMIEXDLI;
+    }
+
+    public void setSMF110S1_RMIEXDLI(BigInteger SMF110S1_RMIEXDLI) {
+        this.SMF110S1_RMIEXDLI = SMF110S1_RMIEXDLI;
+    }
+
+    public BigInteger getSMF110S1_RMIMQM() {
+        return SMF110S1_RMIMQM;
+    }
+
+    public void setSMF110S1_RMIMQM(BigInteger SMF110S1_RMIMQM) {
+        this.SMF110S1_RMIMQM = SMF110S1_RMIMQM;
+    }
+
+    public BigInteger getSMF110S1_RMICPSM() {
+        return SMF110S1_RMICPSM;
+    }
+
+    public void setSMF110S1_RMICPSM(BigInteger SMF110S1_RMICPSM) {
+        this.SMF110S1_RMICPSM = SMF110S1_RMICPSM;
+    }
+
+    public BigInteger getSMF110S1_RMITCPIP() {
+        return SMF110S1_RMITCPIP;
+    }
+
+    public void setSMF110S1_RMITCPIP(BigInteger SMF110S1_RMITCPIP) {
+        this.SMF110S1_RMITCPIP = SMF110S1_RMITCPIP;
+    }
+}
+
+
+
+
+
+
+
+
+
+------------------
+
+
+
+
+
+
+
+
+
+package smf.cics.smf110.subtype1;
+
+
+import org.json.simple.JSONObject;
+
+import java.math.BigInteger;
+import java.util.Arrays;
+
+import static converters.Converter.*;
+
+public class Smf110Subtype1ProductSection {
+    private boolean initialized = false;
+    private int SMF110S1_MNRVN;
+    private String SMF110S1_MNPRN;
+    private String SMF110S1_MNSPN;
+    private int SMF110S1_MNMFL;
+    //private String bin1;
+    private int SMF110S1_MNCL;
+    private long SMF110S1_MNDCA;
+    private int SMF110S1_MNDCL;
+    private int SMF110S1_MNDCN;
+    private long SMF110S1_MNDRA;
+    private int SMF110S1_MNDRL;
+    private int SMF110S1_MNDRN;
+    //private String bin2;
+    private int SMF110S1_MNCRL;
+    private long SMF110S1_MNTAD;
+    private BigInteger SMF110S1_MNLSO;
+    private BigInteger SMF110S1_MNDTO;
+    //private String bin3;
+    private String SMF110S1_MNJBN;
+    private long SMF110S1_MNRSD;
+    private long SMF110S1_MSRST;
+    private String SMF110S1_MNUIF;
+    private String SMF110S1_MNPDN;
+
+
+    public void setSmf110ProductSection(byte[] record) {
+        SMF110S1_MNRVN = byteArrayToUint16(Arrays.copyOfRange(record, 0, 2));
+        SMF110S1_MNPRN = byteArrayToString(Arrays.copyOfRange(record, 2, 10));
+        SMF110S1_MNSPN = byteArrayToString(Arrays.copyOfRange(record, 10, 18));
+        SMF110S1_MNMFL = byteArrayToUint16(Arrays.copyOfRange(record, 18, 20));
+        //bin1 = byteArrayToString(Arrays.copyOfRange(record,20,22));
+        SMF110S1_MNCL = byteArrayToUint16(Arrays.copyOfRange(record, 22, 24));
+        SMF110S1_MNDCA = byteArrayToUint32(Arrays.copyOfRange(record, 24, 28));
+        SMF110S1_MNDCL = byteArrayToUint16(Arrays.copyOfRange(record, 28, 30));
+        SMF110S1_MNDCN = byteArrayToUint16(Arrays.copyOfRange(record, 30, 32));
+        SMF110S1_MNDRA = byteArrayToUint32(Arrays.copyOfRange(record, 32, 36));
+        SMF110S1_MNDRL = byteArrayToUint16(Arrays.copyOfRange(record, 36, 38));
+        SMF110S1_MNDRN = byteArrayToUint16(Arrays.copyOfRange(record, 38, 40));
+        //bin2 = byteArrayToString(Arrays.copyOfRange(record,40,58));
+        SMF110S1_MNCRL = byteArrayToUint16(Arrays.copyOfRange(record, 58, 60));
+        SMF110S1_MNTAD = byteArrayToUint32(Arrays.copyOfRange(record, 60, 64));
+        SMF110S1_MNLSO = byteArrayToUint64(Arrays.copyOfRange(record, 64, 72));
+        SMF110S1_MNDTO = byteArrayToUint64(Arrays.copyOfRange(record, 72, 80));
+        //bin3 = byteArrayToString(Arrays.copyOfRange(record,80,82));
+        SMF110S1_MNJBN = byteArrayToString(Arrays.copyOfRange(record, 82, 90));
+        SMF110S1_MNRSD = byteArrayToUint32(Arrays.copyOfRange(record, 90, 94));
+        SMF110S1_MSRST = byteArrayToUint32(Arrays.copyOfRange(record, 94, 98));
+        SMF110S1_MNUIF = byteArrayToString(Arrays.copyOfRange(record, 98, 106));
+        SMF110S1_MNPDN = byteArrayToString(Arrays.copyOfRange(record, 106, 114));
+    }
+
+    @Override
+    public String toString() {
+        return "\"SMF110S1_MNRVN\":" + SMF110S1_MNRVN +
+                ", \"SMF110S1_MNPRN\":\"" + SMF110S1_MNPRN + '\"' +
+                ", \"SMF110S1_MNSPN\":\"" + SMF110S1_MNSPN + '\"' +
+                ", \"SMF110S1_MNMFL\":" + SMF110S1_MNMFL +
+                ", \"SMF110S1_MNCL\":" + SMF110S1_MNCL +
+                ", \"SMF110S1_MNDCA\":" + SMF110S1_MNDCA +
+                ", \"SMF110S1_MNDCL\":" + SMF110S1_MNDCL +
+                ", \"SMF110S1_MNDCN\":" + SMF110S1_MNDCN +
+                ", \"SMF110S1_MNDRA\":" + SMF110S1_MNDRA +
+                ", \"SMF110S1_MNDRL\":" + SMF110S1_MNDRL +
+                ", \"SMF110S1_MNDRN\":" + SMF110S1_MNDRN +
+                ", \"SMF110S1_MNCRL\":" + SMF110S1_MNCRL +
+                ", \"SMF110S1_MNTAD\":" + SMF110S1_MNTAD +
+                ", \"SMF110S1_MNLSO\":" + SMF110S1_MNLSO +
+                ", \"SMF110S1_MNDTO\":" + SMF110S1_MNDTO +
+                ", \"SMF110S1_MNJBN\":\"" + SMF110S1_MNJBN + '\"' +
+                ", \"SMF110S1_MNRSD\":" + SMF110S1_MNRSD +
+                ", \"SMF110S1_MSRST\":" + SMF110S1_MSRST +
+                ", \"SMF110S1_MNUIF\":\"" + SMF110S1_MNUIF + '\"' +
+                ", \"SMF110S1_MNPDN\":\"" + SMF110S1_MNPDN + '\"';
+    }
+
+    public String getData() {
+        return ",\"tran_cics_name\":\"" + SMF110S1_MNSPN + '\"';
+    }
+
+    @Deprecated
+    public JSONObject getJsonData() {
+        JSONObject data = new JSONObject();
+        data.put("SMF110S1_MNRVN", SMF110S1_MNRVN);
+        data.put("SMF110S1_MNPRN", SMF110S1_MNPRN);
+        data.put("SMF110S1_MNSPN", SMF110S1_MNSPN);
+        data.put("SMF110S1_MNMFL", SMF110S1_MNMFL);
+        data.put("SMF110S1_MNCL", SMF110S1_MNCL);
+        data.put("SMF110S1_MNDCA", SMF110S1_MNDCA);
+        data.put("SMF110S1_MNDCL", SMF110S1_MNDCL);
+        data.put("SMF110S1_MNDCN", SMF110S1_MNDCN);
+        data.put("SMF110S1_MNDRA", SMF110S1_MNDRA);
+        data.put("SMF110S1_MNDRL", SMF110S1_MNDRL);
+        data.put("SMF110S1_MNDRN", SMF110S1_MNDRN);
+        data.put("SMF110S1_MNCRL", SMF110S1_MNCRL);
+        data.put("SMF110S1_MNTAD", SMF110S1_MNTAD);
+        data.put("SMF110S1_MNLSO", SMF110S1_MNLSO);
+        data.put("SMF110S1_MNDTO", SMF110S1_MNDTO);
+        data.put("SMF110S1_MNJBN", SMF110S1_MNJBN);
+        data.put("SMF110S1_MNRSD", SMF110S1_MNRSD);
+        data.put("SMF110S1_MSRST", SMF110S1_MSRST);
+        data.put("SMF110S1_MNUIF", SMF110S1_MNUIF);
+        data.put("SMF110S1_MNPDN", SMF110S1_MNPDN);
+        return data;
+    }
+
+    public boolean isInitialized() {
+        return initialized;
+    }
+
+    public void setInitialized(boolean initialized) {
+        this.initialized = initialized;
+    }
+
+    public String toStringChosen() {
+        return "\"CICSNAME\":\"" + SMF110S1_MNSPN + '\"';
+    }
+
+
+    public int getSMF110S1_MNRVN() {
+        return SMF110S1_MNRVN;
+    }
+
+    public void setSMF110S1_MNRVN(int SMF110S1_MNRVN) {
+        this.SMF110S1_MNRVN = SMF110S1_MNRVN;
+    }
+
+    public String getSMF110S1_MNPRN() {
+        return SMF110S1_MNPRN;
+    }
+
+    public void setSMF110S1_MNPRN(String SMF110S1_MNPRN) {
+        this.SMF110S1_MNPRN = SMF110S1_MNPRN;
+    }
+
+    public String getSMF110S1_MNSPN() {
+        return SMF110S1_MNSPN;
+    }
+
+    public void setSMF110S1_MNSPN(String SMF110S1_MNSPN) {
+        this.SMF110S1_MNSPN = SMF110S1_MNSPN;
+    }
+
+    public int getSMF110S1_MNMFL() {
+        return SMF110S1_MNMFL;
+    }
+
+    public void setSMF110S1_MNMFL(int SMF110S1_MNMFL) {
+        this.SMF110S1_MNMFL = SMF110S1_MNMFL;
+    }
+
+
+    public int getSMF110S1_MNCL() {
+        return SMF110S1_MNCL;
+    }
+
+    public void setSMF110S1_MNCL(int SMF110S1_MNCL) {
+        this.SMF110S1_MNCL = SMF110S1_MNCL;
+    }
+
+    public long getSMF110S1_MNDCA() {
+        return SMF110S1_MNDCA;
+    }
+
+    public void setSMF110S1_MNDCA(long SMF110S1_MNDCA) {
+        this.SMF110S1_MNDCA = SMF110S1_MNDCA;
+    }
+
+    public int getSMF110S1_MNDCL() {
+        return SMF110S1_MNDCL;
+    }
+
+    public void setSMF110S1_MNDCL(int SMF110S1_MNDCL) {
+        this.SMF110S1_MNDCL = SMF110S1_MNDCL;
+    }
+
+    public int getSMF110S1_MNDCN() {
+        return SMF110S1_MNDCN;
+    }
+
+    public void setSMF110S1_MNDCN(int SMF110S1_MNDCN) {
+        this.SMF110S1_MNDCN = SMF110S1_MNDCN;
+    }
+
+    public long getSMF110S1_MNDRA() {
+        return SMF110S1_MNDRA;
+    }
+
+    public void setSMF110S1_MNDRA(long SMF110S1_MNDRA) {
+        this.SMF110S1_MNDRA = SMF110S1_MNDRA;
+    }
+
+    public int getSMF110S1_MNDRL() {
+        return SMF110S1_MNDRL;
+    }
+
+    public void setSMF110S1_MNDRL(int SMF110S1_MNDRL) {
+        this.SMF110S1_MNDRL = SMF110S1_MNDRL;
+    }
+
+    public int getSMF110S1_MNDRN() {
+        return SMF110S1_MNDRN;
+    }
+
+    public void setSMF110S1_MNDRN(int SMF110S1_MNDRN) {
+        this.SMF110S1_MNDRN = SMF110S1_MNDRN;
+    }
+
+    public int getSMF110S1_MNCRL() {
+        return SMF110S1_MNCRL;
+    }
+
+    public void setSMF110S1_MNCRL(int SMF110S1_MNCRL) {
+        this.SMF110S1_MNCRL = SMF110S1_MNCRL;
+    }
+
+    public long getSMF110S1_MNTAD() {
+        return SMF110S1_MNTAD;
+    }
+
+    public void setSMF110S1_MNTAD(long SMF110S1_MNTAD) {
+        this.SMF110S1_MNTAD = SMF110S1_MNTAD;
+    }
+
+    public BigInteger getSMF110S1_MNLSO() {
+        return SMF110S1_MNLSO;
+    }
+
+    public void setSMF110S1_MNLSO(BigInteger SMF110S1_MNLSO) {
+        this.SMF110S1_MNLSO = SMF110S1_MNLSO;
+    }
+
+    public BigInteger getSMF110S1_MNDTO() {
+        return SMF110S1_MNDTO;
+    }
+
+    public void setSMF110S1_MNDTO(BigInteger SMF110S1_MNDTO) {
+        this.SMF110S1_MNDTO = SMF110S1_MNDTO;
+    }
+
+    public String getSMF110S1_MNJBN() {
+        return SMF110S1_MNJBN;
+    }
+
+    public void setSMF110S1_MNJBN(String SMF110S1_MNJBN) {
+        this.SMF110S1_MNJBN = SMF110S1_MNJBN;
+    }
+
+    public long getSMF110S1_MNRSD() {
+        return SMF110S1_MNRSD;
+    }
+
+    public void setSMF110S1_MNRSD(long SMF110S1_MNRSD) {
+        this.SMF110S1_MNRSD = SMF110S1_MNRSD;
+    }
+
+    public long getSMF110S1_MSRST() {
+        return SMF110S1_MSRST;
+    }
+
+    public void setSMF110S1_MSRST(long SMF110S1_MSRST) {
+        this.SMF110S1_MSRST = SMF110S1_MSRST;
+    }
+
+    public String getSMF110S1_MNUIF() {
+        return SMF110S1_MNUIF;
+    }
+
+    public void setSMF110S1_MNUIF(String SMF110S1_MNUIF) {
+        this.SMF110S1_MNUIF = SMF110S1_MNUIF;
+    }
+
+    public String getSMF110S1_MNPDN() {
+        return SMF110S1_MNPDN;
+    }
+
+    public void setSMF110S1_MNPDN(String SMF110S1_MNPDN) {
+        this.SMF110S1_MNPDN = SMF110S1_MNPDN;
+    }
+}
