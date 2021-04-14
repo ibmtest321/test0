@@ -17,7 +17,7 @@ public class Smf110 extends Smf {
         super.set(Arrays.copyOfRange(record, 0, 28));
         if (this.getSmfStp() == 1) {
             //smf101_0.setSmf101Subtype0(record);
-            smf110_1.setSmf110Subtype1(record);
+            smf110_1.setSmf110Subtype1(record,super.getSmfLen());
         } else {
             smf110_1.setInitialized(false);
         }
@@ -50,30 +50,14 @@ public class Smf110 extends Smf {
 
 }
 
-
-
-
-
-
-
-
-
----------------------
-
-
-
-
-
-
-
-
-
+------------------------------
 
 
 package smf.cics.smf110.subtype1;
 
 
 import configuration.smf.SmfConfig;
+import converters.Converter;
 import datamodel.data.ManyRecords;
 import datamodel.data.OneRecord;
 import datamodel.data.Record;
@@ -102,10 +86,12 @@ public class Smf110_1 {
     private Smf110Subtype1PerformanceDataSection smf110Subtype1PerformanceDataSection = new Smf110Subtype1PerformanceDataSection();
     private List<Smf110Subtype1PerformanceDataSection> smf110Subtype1PerformanceDataSectionList = new ArrayList<>();
     private byte[] record;
+    private int smfLen;
 
-    public void setSmf110Subtype1(byte[] recordLocal) {
-        initialized = true;
+    public void setSmf110Subtype1(byte[] recordLocal, int smfLen) {
+        this.initialized = true;
         this.record = recordLocal;
+        this.smfLen = smfLen;
         smf110Bin = byteArrayToUint32(Arrays.copyOfRange(record, 24, 28));
         smf110Aps = byteArrayToUint32(Arrays.copyOfRange(record, 28, 32));
         smf110Lps = byteArrayToUint16(Arrays.copyOfRange(record, 32, 34));
@@ -116,7 +102,8 @@ public class Smf110_1 {
         //smf110FullSize = (int)(smf110Len + smfBuf);
 
         getSmf110Subtype1ProductSection();
-        smf110Subtype1PerformanceDataSectionList = getSmf110Subtype1PerformanceDataSectionList();
+        decompressSmf110Subtype1();
+        this.smf110Subtype1PerformanceDataSectionList = getSmf110Subtype1PerformanceDataSectionList();
 
     }
 
@@ -154,7 +141,7 @@ public class Smf110_1 {
                     (int) smf110Aps + smf110Lps));
             smf110Subtype1ProductSection.setInitialized(true);
 
-        }else{
+        } else {
             smf110Subtype1ProductSection.setInitialized(false);
         }
 
@@ -162,38 +149,50 @@ public class Smf110_1 {
 
     private List<Smf110Subtype1PerformanceDataSection> getSmf110Subtype1PerformanceDataSectionList() {
 
-        if (smf110Subtype1ProductSection.getSMF110S1_MNCRL() == 0) {
-            //record uncompressed
+//        if (smf110Subtype1ProductSection.getSMF110S1_MNCRL() == 0) {
+//        record uncompressed
 
-            if (smf110Subtype1ProductSection.getSMF110S1_MNCL() == 3 && smf110Subtype1ProductSection.getSMF110S1_MNDRN() >= 1) {
-                int offset = (int) smf110Subtype1ProductSection.getSMF110S1_MNDRA();
-                //int ptrSec = (int) smf110ProductSection.getSMF110S1_MNDRA();
+        if (smf110Subtype1ProductSection.getSMF110S1_MNCL() == 3 && smf110Subtype1ProductSection.getSMF110S1_MNDRN() >= 1) {
+            int offset = (int) smf110Subtype1ProductSection.getSMF110S1_MNDRA();
+            //int ptrSec = (int) smf110ProductSection.getSMF110S1_MNDRA();
 
-                List<Smf110Subtype1PerformanceDataSection> listOfSmf110PerformanceDataSection = new ArrayList<>();
+            List<Smf110Subtype1PerformanceDataSection> listOfSmf110PerformanceDataSection = new ArrayList<>();
 
-                for (int i = 0; i < smf110Subtype1ProductSection.getSMF110S1_MNDRN(); i++) {
-                    Smf110Subtype1PerformanceDataSection smf110Subtype1PerformanceDataSectionLocal = new Smf110Subtype1PerformanceDataSection();
-                    //ptrSec += offset;
-                    smf110Subtype1PerformanceDataSectionLocal.setSmf110PerformanceDataSection(Arrays.copyOfRange(
-                            record,
-                            offset,
-                            offset + smf110Subtype1ProductSection.getSMF110S1_MNDRL()));
-                    listOfSmf110PerformanceDataSection.add(smf110Subtype1PerformanceDataSectionLocal);
-                    offset += smf110Subtype1ProductSection.getSMF110S1_MNDRL();
-                    //System.out.println(smf110PerformanceDataSection.toString());
+            for (int i = 0; i < smf110Subtype1ProductSection.getSMF110S1_MNDRN(); i++) {
+                Smf110Subtype1PerformanceDataSection smf110Subtype1PerformanceDataSectionLocal = new Smf110Subtype1PerformanceDataSection();
+                //ptrSec += offset;
+                smf110Subtype1PerformanceDataSectionLocal.setSmf110PerformanceDataSection(Arrays.copyOfRange(
+                        record,
+                        offset,
+                        offset + smf110Subtype1ProductSection.getSMF110S1_MNDRL()));
+                listOfSmf110PerformanceDataSection.add(smf110Subtype1PerformanceDataSectionLocal);
+                offset += smf110Subtype1ProductSection.getSMF110S1_MNDRL();
+                //System.out.println(smf110PerformanceDataSection.toString());
 
                     /*for(int j=0;j<listOfSmf110PerformanceDataSection.size();j++){
                         System.out.println(listOfSmf110PerformanceDataSection.get(j).toString());
                     }*/
-                }
+            }
 
 
-                return listOfSmf110PerformanceDataSection;
+            return listOfSmf110PerformanceDataSection;
 
+
+        }
+        return null;
+    }
+
+    private void decompressSmf110Subtype1() {
+        if (this.smf110Subtype1ProductSection.isInitialized()) {
+//            smf110Subtype1ProductSection.setSmf110ProductSection(Arrays.copyOfRange(data, (int) smf110Aps, (int) smf110Aps + smf110Lps));
+            if (this.smf110Subtype1ProductSection.getSMF110S1_MNCRL() > 0) {
+                this.record = Converter.rleDecode(Arrays.copyOfRange(this.record, 0, this.smfLen),
+                        (32598 + 44 + this.smf110Lps),
+                        (this.smfLen - (44 + this.smf110Lps)),
+                        (44 + this.smf110Lps));
 
             }
         }
-        return null;
     }
 
 
@@ -296,21 +295,7 @@ public class Smf110_1 {
 }
 
 
-
-
-
-
-
-
-
-
---------------------
-
-
-
-
-
-
+-------------------------
 
 package smf.cics.smf110.subtype1;
 
@@ -978,22 +963,7 @@ public class Smf110Subtype1PerformanceDataSection {
 }
 
 
-
-
-
-
-
-
-
-------------------
-
-
-
-
-
-
-
-
+----------------------------
 
 package smf.cics.smf110.subtype1;
 
@@ -1286,3 +1256,4 @@ public class Smf110Subtype1ProductSection {
         this.SMF110S1_MNPDN = SMF110S1_MNPDN;
     }
 }
+
