@@ -1257,3 +1257,44 @@ public class Smf110Subtype1ProductSection {
     }
 }
 
+
+
+----------------------
+
+    public static byte[] rleDecode(byte[] input, int sizeofOutput, int sizeOfInput, int initialUncompressedBytes) {
+        byte[] output = new byte[sizeofOutput];
+        int i, j, i_i, i_o, i_copy;
+        for (i = 0; i < initialUncompressedBytes; i++) {
+            output[i] = input[i];
+        }
+
+        byte car;
+        //printRecordInHexadecimal(input);
+
+        /*if (input[0]!=(byte)0x80)
+        {
+            System.out.println("Not compressed");
+            return null;
+        }*/
+        i_i = initialUncompressedBytes + 1;
+        i_o = initialUncompressedBytes;
+        while (i_i < sizeOfInput) {
+            i_copy = input[i_i] & (byte) 0x7F;
+            if ((input[i_i] & (byte) 0x80) == (byte) 0x80) /* si tratta di una ripetizione */ {
+                car = input[i_i + 1];
+                for (i = 0; i < i_copy; i++) {
+                    output[i_o + i] = car;
+                }
+                i_o = i_o + i_copy;
+                i_i = i_i + 2;
+            } else /* si tratta di fare una copia dei prossimi bytes */ {
+                for (i = 0; i < i_copy; i++) {
+                    i_i++;
+                    output[i_o + i] = input[i_i];
+                }
+                i_i++;
+                i_o = i_o + i_copy;
+            }
+        }
+        return output;
+    }
